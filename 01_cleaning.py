@@ -53,12 +53,28 @@ def main():
     df_name['clean_name'] = df_name.product_name.apply(clean)
     catalog['brand'] = catalog.brand.str.lower().str.replace(' ', '')
 
+    # tag possible brand
     unique_brand = sorted(catalog.brand.unique())
+    brand_sku_tokens = {}
+
+    for brand in unique_brand:
+        brand_sku_tokens[brand] = set()
+
+        for sku in catalog[catalog.brand == brand].clean_sku:
+            brand_sku_tokens[brand] |= set(sku.split(' '))
+
+    for brand in brand_sku_tokens:
+        # keep alphabetics with length >= 4 only
+        brand_sku_tokens[brand] = set(filter(lambda x: len(x) >= 4 and x.isalpha(), brand_sku_tokens[brand]))
+
+    brand_sku_tokens['dgw/hextar'] |= {'hx', 'dgw'}
+    # brand_sku_tokens
 
     def possible_brands(string):
         for brand in unique_brand:
-            if brand in string:
-                return brand
+            for token in brand_sku_tokens[brand]:
+                if token in string:
+                    return brand
         return np.nan
 
     df_name['possible_brand'] = df_name.clean_name.str.replace(' ', '').apply(possible_brands)

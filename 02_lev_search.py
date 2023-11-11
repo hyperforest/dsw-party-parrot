@@ -14,7 +14,7 @@ def main():
 
     catalog.brand = catalog.brand.str.lower().str.replace(' ', '')
 
-    joined = duckdb.query(
+    result_lev = duckdb.query(
         '''
         WITH joined AS (
             SELECT
@@ -36,20 +36,9 @@ def main():
             levenshtein(clean_name, clean_sku) AS lev_distance
         FROM
             joined
-        '''
-    ).to_df()
-
-    result_lev = duckdb.query(
-        """
-        SELECT
-            *
-        FROM
-            joined
-        WHERE
-            lev_distance < 2
         QUALIFY
             ROW_NUMBER() OVER (PARTITION BY clean_name ORDER BY lev_distance, clean_sku) = 1
-        """
+        '''
     ).to_df()
 
     final_res = df_name.copy()
