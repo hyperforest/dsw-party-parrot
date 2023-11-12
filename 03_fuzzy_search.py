@@ -56,10 +56,13 @@ def main():
                 dn.*,
                 c.*,
                 is_name_token_present_in_sku(
-                    dn.clean_name_non_formula,
-                    c.clean_sku || ' ' || c.brand
+                    dn.clean_name_alphanum,
+                    c.clean_sku_alphanum || ' ' || c.brand || ' ' || c.type
                 ) AS is_name_token_present_in_sku_or_brand,
-                compute_fuzz(dn.clean_name, c.clean_sku) AS fuzzy_ratio,
+                compute_fuzz(
+                    dn.clean_name_alphanum,
+                    c.clean_sku_alphanum  || ' ' || c.brand || ' ' || c.type
+                ) AS fuzzy_ratio,
             FROM
                 df_name AS dn
             CROSS JOIN
@@ -68,7 +71,7 @@ def main():
 
         SELECT
             *,
-            levenshtein(clean_name_non_formula, clean_sku) AS lev_dist_fuzzy_wo_form
+            levenshtein(clean_name_alphanum, clean_sku_alphanum) AS lev_dist_fuzzy
         FROM
             joined
         WHERE
@@ -84,7 +87,6 @@ def main():
                     possible_brand IS NOT NULL DESC,
                     is_name_token_present_in_sku_or_brand DESC,
                     fuzzy_ratio DESC,
-                    lev_dist_fuzzy_wo_form,
                     clean_sku,
                     product_id
             ) = 1
@@ -106,6 +108,7 @@ def main():
             rl.is_name_only_alphabet,
             rl.clean_name_non_formula,
             rl.clean_name_formula,
+            rl.clean_name_alphanum,
 
             rl.clean_name,
             rl.result_clean_sku_lev,
@@ -114,16 +117,20 @@ def main():
             rf.fuzzy_ratio,
             
             rl.lev_dist_lev,
-            levenshtein(rf.clean_name, rf.clean_sku) AS lev_dist_fuzzy,
+            levenshtein(rf.clean_name_alphanum, rf.clean_sku_alphanum) AS lev_dist_fuzzy,
             
-            rl.lev_dist_lev_wo_form,
-            rf.lev_dist_fuzzy_wo_form,
-            
-            is_name_token_present_in_sku(rl.clean_name, rl.result_clean_sku_lev) AS is_name_token_present_in_sku_lev,
-            is_name_token_present_in_sku(rf.clean_name, rf.clean_sku) AS is_name_token_present_in_sku_fuzzy,
+            is_name_token_present_in_sku(
+                rf.clean_name_alphanum,
+                rl.result_clean_sku_lev
+            ) AS is_name_token_present_in_sku_lev,
+
+            is_name_token_present_in_sku(
+                rf.clean_name_alphanum,
+                rf.clean_sku
+            ) AS is_name_token_present_in_sku_fuzzy,
 
             rl.cnt_common_tokens_lev,
-            count_common_tokens(rf.clean_name, rf.clean_sku) AS cnt_common_tokens_fuzzy,
+            count_common_tokens(rf.clean_name_alphanum, rf.clean_sku) AS cnt_common_tokens_fuzzy,
         FROM
             result_lev AS rl
         LEFT JOIN
