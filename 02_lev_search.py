@@ -52,11 +52,11 @@ def main():
                 j.is_name_only_alphabet,
                 j.clean_name_non_formula,
                 j.clean_name_formula,
+                j.clean_name_alphanum,
                 j.clean_name,
                 j.clean_sku AS result_clean_sku_lev,
-                levenshtein(j.clean_name, j.clean_sku) AS lev_dist_lev,
-                levenshtein(j.clean_name_non_formula, j.clean_sku) AS lev_dist_lev_wo_form,
-                count_common_tokens(j.clean_name, j.clean_sku) AS cnt_common_tokens_lev
+                levenshtein(j.clean_name_alphanum, j.clean_sku_alphanum) AS lev_dist_lev,
+                count_common_tokens(j.clean_name_alphanum, j.clean_sku_alphanum) AS cnt_common_tokens_lev
             FROM
                 df_name AS dn
             LEFT JOIN
@@ -69,7 +69,6 @@ def main():
                         dn.product_id
                     ORDER BY
                         lev_dist_lev,
-                        lev_dist_lev_wo_form,
                         j.clean_sku,
                         dn.product_id
                 ) = 1
