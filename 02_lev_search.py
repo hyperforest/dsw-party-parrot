@@ -1,69 +1,91 @@
-import os
-import re
 import duckdb
-import numpy as np
 import pandas as pd
 
-from fuzzywuzzy import fuzz
-from tqdm import tqdm
+from time import time
 
 
+def timeit(func):
+    def wrapper(*args, **kwargs):
+        start = time()
+        result = func(*args, **kwargs)
+        print(f"Time elapsed: {time() - start:.2f} seconds")
+        return result
+
+    return wrapper
+
+
+def count_common_tokens(product_name: str, product_sku: str) -> int:
+    name = set(product_name.split(" "))
+    sku = set(product_sku.split(" "))
+
+    return len(name & sku)
+
+
+@timeit
 def main():
-    df_name = pd.read_csv('datasets/processed/product_name.tsv', sep='\t')
-    catalog = pd.read_csv('datasets/processed/product_catalog.tsv', sep='\t')
+    df_name = pd.read_csv("datasets/processed/product_name.tsv", sep="\t") # noqa: F841
+    catalog = pd.read_csv("datasets/processed/product_catalog.tsv", sep="\t")
+    catalog.brand = catalog.brand.str.lower().str.replace(" ", "")
 
-    catalog.brand = catalog.brand.str.lower().str.replace(' ', '')
+    duckdb.create_function("count_common_tokens", count_common_tokens)
 
-    result_lev = duckdb.query(
-        '''
+    result_lev = duckdb.query(  # noqa: F841
+        """
         WITH joined AS (
             SELECT
-                dn.clean_name,
-                dn.possible_brand,
-                c.product_sku,
-                c.clean_sku
+                dn.*,
+                c.*
             FROM
                 df_name AS dn
             CROSS JOIN
                 catalog AS c
         )
 
+        , final AS (
+            SELECT
+                dn.product_id,
+                dn.product_name,
+                j.product_sku AS result_sku_lev,
+                j.sku_id AS result_sku_id_lev,
+                j.possible_brand,
+                j.is_name_only_alphanum,
+                j.is_name_only_alphabet,
+                j.clean_name_non_formula,
+                j.clean_name_formula,
+                j.clean_name,
+                j.clean_sku AS result_clean_sku_lev,
+                levenshtein(j.clean_name, j.clean_sku) AS lev_dist_lev,
+                levenshtein(j.clean_name_non_formula, j.clean_sku) AS lev_dist_lev_wo_form,
+                count_common_tokens(j.clean_name, j.clean_sku) AS cnt_common_tokens_lev
+            FROM
+                df_name AS dn
+            LEFT JOIN
+                joined AS j
+            ON
+                dn.clean_name = j.clean_name
+            QUALIFY
+                ROW_NUMBER() OVER (
+                    PARTITION BY
+                        dn.product_id
+                    ORDER BY
+                        lev_dist_lev,
+                        lev_dist_lev_wo_form,
+                        j.clean_sku,
+                        dn.product_id
+                ) = 1
+        )
+
         SELECT
-            clean_name,
-            product_sku,
-            clean_sku,
-            possible_brand,
-            levenshtein(clean_name, clean_sku) AS lev_distance
+            *
         FROM
-            joined
-        QUALIFY
-            ROW_NUMBER() OVER (PARTITION BY clean_name ORDER BY lev_distance, clean_sku) = 1
-        '''
+            final
+        ORDER BY
+            product_id
+        """
     ).to_df()
 
-    final_res = df_name.copy()
-
-    final_res = duckdb.query(
-        '''
-        SELECT
-            f.product_name,
-            r.product_sku,
-            f.clean_name,
-            r.clean_sku,
-            f.is_only_alphanum AS is_name_only_alphanum,
-            f.possible_brand,
-            r.lev_distance,
-        FROM
-            final_res AS f
-        LEFT JOIN
-            result_lev AS r
-        ON
-            f.clean_name = r.clean_name
-        '''
-    ).to_df()
-
-    final_res.to_csv('datasets/processed/final_result.tsv', sep='\t', index=False)
+    result_lev.to_csv("datasets/processed/result_lev.tsv", sep="\t", index=False)
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
