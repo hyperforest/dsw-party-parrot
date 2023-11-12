@@ -11,7 +11,7 @@ def is_containing_non_alphanumeric(string):
 
 
 def is_alphabet_only(string):
-    return string.isalpha()
+    return not bool(re.search(r"[^a-zA-Z ]", string))
 
 
 def clean(s):
@@ -62,8 +62,12 @@ def extract_non_formula(text):
     match = re.search(pattern, text)
 
     if match:
-        extracted_prefix = match.group()
-        return extracted_prefix.strip()
+        s = match.group()
+
+        # remove characters other than alphabets, numbers, and spaces
+        s = re.sub(r"[^a-zA-Z0-9 ]", "", s)
+
+        return s.strip()
 
     return np.nan
 
@@ -73,6 +77,10 @@ def extract_formula(s):
     if match:
         return match.group()
     return np.nan
+
+
+def extract_alpha_num_only(s):
+    return re.sub(r"[^a-zA-Z0-9 ]", "", s)
 
 
 def timeit(func):
@@ -112,6 +120,7 @@ def main():
     )
     df_name["is_name_only_alphabet"] = df_name["product_name"].apply(is_alphabet_only)
     df_name["clean_name"] = df_name.product_name.apply(clean)
+    df_name["clean_name_alphanum"] = df_name.clean_name.apply(extract_alpha_num_only)
     df_name["clean_name_non_formula"] = df_name.clean_name.apply(extract_non_formula)
     df_name["clean_name_formula"] = df_name.clean_name.apply(extract_formula)
 
@@ -120,10 +129,12 @@ def main():
     )
     catalog["is_sku_only_alphabet"] = catalog["product_sku"].apply(is_alphabet_only)
     catalog["clean_sku"] = catalog.product_sku.apply(clean)
+    catalog["clean_sku_alphanum"] = catalog.clean_sku.apply(extract_alpha_num_only)
     catalog["clean_sku_non_formula"] = catalog.clean_sku.apply(extract_non_formula)
     catalog["clean_sku_formula"] = catalog.clean_sku.apply(extract_formula)
     
     catalog["brand"] = catalog.brand.str.lower().str.replace("/", " ")
+    catalog["type"] = catalog.type.str.lower()
 
     # tag possible brand
     unique_brand = sorted(catalog.brand.unique())
